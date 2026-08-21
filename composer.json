@@ -1,0 +1,53 @@
+{
+    "name": "mrpunyapal/git-reader",
+    "description": "Read-only Git client for PHP over smart HTTPS. Fetch refs, trees, and file contents from any Git host without the git binary, provider APIs, or clones.",
+    "keywords": ["git", "client", "read-only", "smart-http", "packfile", "shallow"],
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": "^8.3",
+        "ext-zlib": "*"
+    },
+    "require-dev": {
+        "laravel/pint": "^1.18",
+        "pestphp/pest": "^3.8 || ^4.0",
+        "phpstan/phpstan": "^2.1",
+        "rector/rector": "^2.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "GitReader\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/"
+        }
+    },
+    "config": {
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        },
+        "sort-packages": true
+    },
+    "scripts": {
+        "lint": [
+            "rector",
+            "pint --parallel"
+        ],
+        "test:lint": [
+            "rector --dry-run",
+            "pint --test --parallel"
+        ],
+        "test:types": "phpstan analyse --ansi",
+        "test:unit": "pest --parallel",
+        "test": [
+            "Composer\\Config::disableProcessTimeout",
+            "@test:lint",
+            "@test:types",
+            "@test:unit"
+        ]
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
