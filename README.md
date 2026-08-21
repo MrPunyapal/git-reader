@@ -1,5 +1,11 @@
 # Git Reader
 
+[![Tests](https://github.com/MrPunyapal/git-reader/actions/workflows/run-tests.yml/badge.svg)](https://github.com/MrPunyapal/git-reader/actions/workflows/run-tests.yml)
+[![Latest Version on Packagist](https://img.shields.io/packagist/v/mrpunyapal/git-reader.svg)](https://packagist.org/packages/mrpunyapal/git-reader)
+[![Total Downloads](https://img.shields.io/packagist/dt/mrpunyapal/git-reader.svg)](https://packagist.org/packages/mrpunyapal/git-reader)
+[![PHP Version](https://img.shields.io/packagist/php-v/mrpunyapal/git-reader.svg)](https://packagist.org/packages/mrpunyapal/git-reader)
+[![License](https://img.shields.io/packagist/l/mrpunyapal/git-reader.svg)](LICENSE.md)
+
 Git Reader is a read only Git client for PHP. It connects to a Git server over HTTPS, resolves a branch or tag to a commit, downloads a shallow snapshot of that commit, and lets you read files from it.
 
 It does not run the git binary. It does not clone a working copy. It does not call provider APIs. Any server that speaks the standard Git smart HTTP protocol works: GitHub, GitLab, Bitbucket, Gitea, or your own installation.
