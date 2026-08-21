@@ -1,0 +1,10 @@
+# Git Reader
+> Read-only Git client for PHP. Resolve refs and read files from any Git host over HTTPS.
+
+## Docs
+
+- https://mrpunyapal.github.io/git-reader/: Git Reader
+- https://mrpunyapal.github.io/git-reader/how-it-works: How it works
+- https://mrpunyapal.github.io/git-reader/installation: Installation
+- https://mrpunyapal.github.io/git-reader/limits: Limits
+- https://mrpunyapal.github.io/git-reader/usage: Usage

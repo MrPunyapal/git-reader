@@ -1,6 +1,6 @@
 {
     "name": "mrpunyapal/git-reader",
-    "description": "Read-only Git client for PHP over smart HTTPS. Fetch refs, trees, and file contents from any Git host without the git binary, provider APIs, or clones.",
+    "description": "Read-only Git client for PHP. Resolve refs and read files from any Git host over HTTPS, without the git binary.",
     "keywords": ["git", "client", "read-only", "smart-http", "packfile", "shallow"],
     "type": "library",
     "license": "MIT",
@@ -10,6 +10,7 @@
     },
     "require-dev": {
         "laravel/pint": "^1.18",
+        "mrpunyapal/docsmith": "0.2.1",
         "pestphp/pest": "^3.8 || ^4.0",
         "phpstan/phpstan": "^2.1",
         "rector/rector": "^2.0"

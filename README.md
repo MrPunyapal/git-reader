@@ -1,77 +1,80 @@
 # Git Reader
 
-A read-only Git client for PHP that speaks the standard **smart-HTTP** protocol directly — fetch refs, browse trees, and read file contents from any Git host without the `git` binary, provider APIs, or clones.
+Git Reader is a read only Git client for PHP. It connects to a Git server over HTTPS, resolves a branch or tag to a commit, downloads a shallow snapshot of that commit, and lets you read files from it.
+
+It does not run the git binary. It does not clone a working copy. It does not call provider APIs. Any server that speaks the standard Git smart HTTP protocol works: GitHub, GitLab, Bitbucket, Gitea, or your own installation.
+
+## Installation
+
+```bash
+composer require mrpunyapal/git-reader
+```
+
+Requires PHP 8.3 or newer with the zlib extension. There are no other dependencies.
+
+## Usage
 
 ```php
 use GitReader\RemoteRepository;
 
-$repo  = new RemoteRepository('https://github.com/laravel/framework.git');
-$ref   = $repo->resolveRef('12.x');            // branch | tag | advertised tip SHA
-$store = $repo->fetchTipSnapshot($ref->sha);   // depth-1 shallow fetch
+$repo = new RemoteRepository('https://github.com/laravel/framework.git');
 
-$docs = $store->resolveTreePath(
-    $store->commitTreeSha($ref->sha),
-    'docs',
-);
+$ref = $repo->resolveRef('12.x');
+$store = $repo->fetchTipSnapshot($ref->sha);
 
-foreach ($store->flattenTree($docs->sha) as ['path' => $path, 'sha' => $sha]) {
-    echo $path . ' (' . strlen($store->object($sha)->data) . " bytes)\n";
+$docs = $store->resolveTreePath($store->commitTreeSha($ref->sha), 'docs');
+
+foreach ($store->flattenTree($docs->sha) as $entry) {
+    echo $entry['path'], "\n";
 }
+
+$contents = $store->object($entry['sha'])->data;
 
 $store->cleanup();
 ```
 
-## Why
+## How it works
 
-Every existing PHP option shells out to `git` (gitonomy/gitlib, czproject/git-php), downloads full history (rodziu/php-git), is GPL-incompatible (wp-php-toolkit/git), or is provider-specific. Git Reader implements the minimal read-only subset natively:
+The library speaks the same protocol that `git clone` uses over HTTP:
 
-- **Host-agnostic** — GitHub, GitLab, Bitbucket, Gitea, self-hosted; plain HTTPS Git URLs. The client never knows who hosts the repository.
-- **Zero dependencies** — native PHP streams + bundled `ext-zlib` only.
-- **Efficient** — one depth-1 shallow fetch per ref (`deepen 1`): no history, no negotiation, no thin packs, no working tree.
-- **Streaming packfile parser** — ofs/ref delta support with a memory-bounded base cache and SHA-1 trailer verification.
-- **Typed error taxonomy** — repository not found, auth required, unknown ref, protocol corruption.
+1. A GET request returns the list of refs from the server.
+2. A single POST asks for one commit with depth 1.
+3. The server replies with a packfile. The parser inflates each object, resolves deltas, and stores them in a temporary directory.
+4. Tree objects are walked to find files, and blob contents are read on demand.
 
-## Requirements
-
-PHP 8.3+ with the bundled `zlib` extension. Nothing else.
+Because this is the standard protocol, the library works with any host and never needs to know which one it is talking to.
 
 ## API
 
 | Call | Purpose |
 |---|---|
 | `new RemoteRepository(string $url)` | Create a client for a Git HTTPS URL |
-| `$repo->refs(): RefAdvertisement` | Ref discovery (cached per instance) |
-| `$repo->resolveRef(string $ref): ResolvedRef` | Branch/tag/SHA → commit SHA (annotated tags peel automatically) |
-| `$repo->fetchTipSnapshot(string $sha): PackObjectStore` | Download a depth-1 snapshot into a temporary object store |
-| `$store->commitTreeSha(string $sha): string` | Commit → root tree |
-| `$store->resolveTreePath(string $tree, string $path): TreeEntry` | Walk to a subtree or blob |
-| `$store->flattenTree(string $tree): array` | Recursive `{path, mode, sha}` listing |
-| `$store->object(string $sha): GitObject` | Reconstruct any fetched object |
+| `$repo->refs(): RefAdvertisement` | List refs on the server |
+| `$repo->resolveRef(string $ref): ResolvedRef` | Turn a branch, tag, or SHA into a commit SHA |
+| `$repo->fetchTipSnapshot(string $sha): PackObjectStore` | Download a depth 1 snapshot |
+| `$store->commitTreeSha(string $sha): string` | Get the root tree of a commit |
+| `$store->resolveTreePath(string $tree, string $path): TreeEntry` | Walk to a subdirectory or file |
+| `$store->flattenTree(string $tree): array` | List every path below a tree |
+| `$store->object(string $sha): GitObject` | Read an object by SHA |
 | `$store->cleanup(): void` | Delete the temporary store |
 
-## Scope & limits
+## Limits
 
-Deliberately minimal and read-only:
+- Public repositories only. Authentication is not implemented yet.
+- Read only. There is no push, no history walking, and no merge support.
+- SHA-1 repositories only. Servers configured for SHA-256 are rejected with a clear error.
+- Each fetch downloads one snapshot of the requested ref. On very large repositories this can be tens of megabytes.
 
-- Public repositories over HTTP(S) smart transport
-- Protocol v0 (universally served), SHA-1 object IDs
-- Shallow depth-1 snapshots — no history walking, no negotiation, no push
+## Used by
 
-Not included (yet): private-repo authentication, partial-clone filters, SSH transport, writes of any kind.
+- [DocSmith](https://github.com/MrPunyapal/docsmith) uses it to pull documentation from other repositories.
 
 ## Testing
 
-The test suite is fully offline: canned smart-HTTP fixtures (real git-generated packfiles) are replayed by PHP's built-in web server, exercising the complete transport → discovery → fetch → parse stack over a real socket.
+The test suite runs offline. Recorded responses from real git servers are replayed by PHP's built in web server, so the full request cycle is covered without network access.
 
 ```bash
-composer install
 composer test
-```
-
-Regenerate wire fixtures after protocol changes:
-
-```bash
-php tests/Fixtures/Wire/generate.php
 ```
 
 ## License
