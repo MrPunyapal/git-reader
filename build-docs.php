@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-require __DIR__.'/vendor/autoload.php';
+require __DIR__ . '/vendor/autoload.php';
 
 use Docsmith\Docsmith;
 
-$output = __DIR__.'/docs';
+$output = __DIR__ . '/docs';
 
 Docsmith::make()
-    ->source(__DIR__.'/md')
+    ->source(__DIR__ . '/md')
     ->output($output)
     ->title('Git Reader')
     ->description('Read-only Git client for PHP. Resolve refs and read files from any Git host over HTTPS.')
@@ -29,7 +29,7 @@ Docsmith::make()
 // The sitemap <lastmod> is derived from file mtimes, which differ between
 // local builds and CI checkouts. Strip it so the generated site is
 // deterministic and CI never produces a docs commit loop.
-$sitemap = $output.'/sitemap.xml';
+$sitemap = $output . '/sitemap.xml';
 
 if (is_file($sitemap)) {
     $normalized = (string) preg_replace(
