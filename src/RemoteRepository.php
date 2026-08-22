@@ -5,11 +5,16 @@ declare(strict_types=1);
 namespace GitReader;
 
 /**
- * Read-only client for public Git repositories over smart HTTPS.
+ * Read-only client for Git repositories over smart HTTPS.
  *
  * Speaks the classic (protocol v0) wire format, which every major host still
  * serves by default: ref discovery followed by a single shallow
  * (`deepen 1`) upload-pack request. No negotiation, no thin packs, no side-band.
+ *
+ * Public repositories work out of the box. Private repositories are supported
+ * by attaching HTTP Basic credentials (`withCredentials()`): a request answered
+ * with HTTP 401 is retried once with an Authorization header, and a repeated
+ * rejection throws AuthenticationFailedException.
  *
  * @internal
  */
@@ -24,6 +29,7 @@ final class RemoteRepository
     public function __construct(
         private readonly string $repositoryUrl,
         private readonly SmartHttpTransport $transport = new SmartHttpTransport(),
+        private readonly ?Credentials $credentials = null,
     ) {
         if (! preg_match('#^https?://#i', $repositoryUrl)) {
             throw new GitException(sprintf(
@@ -31,6 +37,15 @@ final class RemoteRepository
                 $repositoryUrl,
             ));
         }
+    }
+
+    /**
+     * Returns a copy of this client that authenticates with the given HTTP
+     * Basic credentials. Passing null removes any credentials.
+     */
+    public function withCredentials(?Credentials $credentials): self
+    {
+        return new self($this->repositoryUrl, $this->transport, $credentials);
     }
 
     /**
@@ -43,19 +58,21 @@ final class RemoteRepository
         }
 
         $base = rtrim($this->repositoryUrl, '/');
-        $response = $this->transport->get(
+        $response = $this->requestWithAuthRetry(
+            'GET',
             $base . '/info/refs?service=git-upload-pack',
+            null,
             ['Accept' => 'application/x-git-upload-pack-advertisement'],
         );
 
         $this->uploadBaseUrl = $response->effectiveUrl;
         $status = $response->status;
 
-        if ($status === 401 || $status === 403) {
+        if ($status === 403) {
             $response->close();
 
             throw new GitException(sprintf(
-                'The repository [%s] requires authentication (%d). Private repositories are not supported yet.',
+                'The repository [%s] refused access (%d). Check the URL and that your credentials grant read access.',
                 $this->repositoryUrl,
                 $status,
             ));
@@ -179,19 +196,18 @@ final class RemoteRepository
         $path = preg_replace('#/+info/refs$#', '', (string) ($parts['path'] ?? '')) ?? '';
         $base .= $path;
 
-        $response = $this->transport->post(
-            $base . '/git-upload-pack',
-            $request,
-            [
-                'Content-Type' => 'application/x-git-upload-pack-request',
-                'Accept' => 'application/x-git-upload-pack-result',
-            ],
-        );
+        $response = $this->requestWithAuthRetry('POST', $base . '/git-upload-pack', $request, [
+            'Content-Type' => 'application/x-git-upload-pack-request',
+            'Accept' => 'application/x-git-upload-pack-result',
+        ]);
 
-        if ($response->status === 401 || $response->status === 403) {
+        if ($response->status === 403) {
             $response->close();
 
-            throw new GitException('The remote rejected the fetch request; authentication is not supported yet.');
+            throw new GitException(sprintf(
+                'The remote refused the fetch request (%d); the provided credentials may lack read access.',
+                $response->status,
+            ));
         }
 
         if ($response->status !== 200) {
@@ -252,6 +268,69 @@ final class RemoteRepository
         }
 
         return PackObjectStore::import($packPath, memoryBudgetBytes: $memoryBudgetBytes);
+    }
+
+    /**
+     * Performs a transport request and answers a single HTTP 401 challenge
+     * with the configured credentials, retrying the exact same request once.
+     *
+     * The first attempt is sent without an Authorization header so servers
+     * that ignore credentials on public repositories keep working; a 401
+     * response triggers exactly one authorized retry.
+     *
+     * @param  array<string, string>  $headers
+     */
+    private function requestWithAuthRetry(string $method, string $url, ?string $body, array $headers): TransportResponse
+    {
+        $authorized = false;
+        $response = $this->send($method, $url, $body, $headers, $authorized);
+
+        if ($response->status !== 401) {
+            return $response;
+        }
+
+        $response->close();
+
+        if (! $authorized) {
+            if ($this->credentials === null) {
+                throw new GitException(sprintf(
+                    'The repository [%s] requires authentication (%d) (the repository may be private; provide credentials).',
+                    $this->repositoryUrl,
+                    $response->status,
+                ));
+            }
+
+            $authorized = true;
+            $response = $this->send($method, $url, $body, $headers, $authorized);
+
+            if ($response->status !== 401) {
+                return $response;
+            }
+
+            $response->close();
+        }
+
+        throw new AuthenticationFailedException(sprintf(
+            'Authentication failed for repository [%s]: the server rejected the provided credentials (HTTP %d).',
+            $this->repositoryUrl,
+            $response->status,
+        ));
+    }
+
+    /**
+     * @param  array<string, string>  $headers
+     */
+    private function send(string $method, string $url, ?string $body, array $headers, bool $authorized): TransportResponse
+    {
+        if ($authorized && $this->credentials instanceof Credentials) {
+            $headers['Authorization'] = $this->credentials->authorizationHeader();
+        }
+
+        if ($method === 'POST') {
+            return $this->transport->post($url, (string) $body, $headers);
+        }
+
+        return $this->transport->get($url, $headers);
     }
 
     public static function normalizeRepositoryUrl(string $url): string
