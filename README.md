@@ -5,6 +5,7 @@
 [![Total Downloads](https://img.shields.io/packagist/dt/mrpunyapal/git-reader.svg)](https://packagist.org/packages/mrpunyapal/git-reader)
 [![PHP Version](https://img.shields.io/packagist/php-v/mrpunyapal/git-reader.svg)](https://packagist.org/packages/mrpunyapal/git-reader)
 [![License](https://img.shields.io/packagist/l/mrpunyapal/git-reader.svg)](LICENSE.md)
+[![PHP Version Compatibility](https://badge.laravel.cloud/php-badge/mrpunyapal/git-reader?style=flat-square)](https://packagist.org/packages/mrpunyapal/git-reader)
 
 Git Reader is a read only Git client for PHP. It connects to a Git server over HTTPS, resolves a branch or tag to a commit, downloads a shallow snapshot of that commit, and lets you read files from it.
 
