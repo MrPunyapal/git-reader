@@ -2,6 +2,9 @@
 
 declare(strict_types=1);
 
+use GitReader\AuthenticationFailedException;
+use GitReader\Credentials;
+use GitReader\GitException;
 use GitReader\ProtocolException;
 use GitReader\RemoteRepository;
 use GitReader\RepositoryNotFoundException;
@@ -131,3 +134,90 @@ it('reports missing repositories clearly', function (): void {
         stopWireServer([$port, $process]);
     }
 })->throws(RepositoryNotFoundException::class);
+
+it('retries a 401 challenge with credentials and fetches a private repository end to end', function (): void {
+    [$port, $process] = startWireServer();
+
+    try {
+        $meta = json_decode((string) file_get_contents(WIRE_FIXTURES . '/meta.json'), true);
+        $head = is_array($meta) && is_string($meta['head'] ?? null) ? $meta['head'] : '';
+
+        $repo = (new RemoteRepository('http://127.0.0.1:' . $port . '/private.git'))
+            ->withCredentials(Credentials::make('secret-token'));
+
+        $resolved = $repo->resolveRef('main');
+
+        expect($resolved->sha)->toBe($head)
+            ->and($resolved->name)->toBe('refs/heads/main');
+
+        $store = $repo->fetchTipSnapshot($resolved->sha);
+
+        $rootTree = $store->commitTreeSha($resolved->sha);
+        $paths = array_map(fn (array $entry): string => (string) $entry['path'], $store->flattenTree($rootTree));
+
+        expect($paths)->toContain('README.md');
+
+        $store->cleanup();
+    } finally {
+        stopWireServer([$port, $process]);
+    }
+});
+
+it('throws AuthenticationFailedException when the server rejects the provided token twice', function (): void {
+    [$port, $process] = startWireServer();
+
+    try {
+        $repo = (new RemoteRepository('http://127.0.0.1:' . $port . '/private.git'))
+            ->withCredentials(Credentials::make('wrong-token'));
+
+        try {
+            $repo->refs();
+
+            throw new RuntimeException('Expected AuthenticationFailedException.');
+        } catch (AuthenticationFailedException $exception) {
+            expect($exception->getMessage())
+                ->toContain(sprintf('Authentication failed for repository [http://127.0.0.1:%d/private.git]', $port));
+            expect($exception->getMessage())->not->toContain('wrong-token');
+        }
+    } finally {
+        stopWireServer([$port, $process]);
+    }
+});
+
+it('keeps the unauthenticated failure path with a private repository hint', function (): void {
+    [$port, $process] = startWireServer();
+
+    try {
+        $repo = new RemoteRepository('http://127.0.0.1:' . $port . '/locked.git');
+
+        try {
+            $repo->refs();
+
+            throw new RuntimeException('Expected GitException.');
+        } catch (GitException $exception) {
+            expect($exception)->toBeInstanceOf(GitException::class)
+                ->and($exception->getMessage())->toContain('the repository may be private; provide credentials');
+        }
+    } finally {
+        stopWireServer([$port, $process]);
+    }
+});
+
+it('sends the Authorization header value derived from the credentials', function (): void {
+    [$port, $process] = startWireServer();
+
+    try {
+        // The fixture only answers /private.git when it receives exactly
+        // "Basic " . base64_encode("x-access-token:secret-token"), so a
+        // successful ref discovery proves the header value is correct.
+        $repo = (new RemoteRepository('http://127.0.0.1:' . $port . '/private.git'))
+            ->withCredentials(Credentials::make('secret-token'));
+
+        $meta = json_decode((string) file_get_contents(WIRE_FIXTURES . '/meta.json'), true);
+        $head = is_array($meta) && is_string($meta['head'] ?? null) ? $meta['head'] : '';
+
+        expect($repo->refs()->shaFor('refs/heads/main') ?? '')->toBe($head);
+    } finally {
+        stopWireServer([$port, $process]);
+    }
+});
