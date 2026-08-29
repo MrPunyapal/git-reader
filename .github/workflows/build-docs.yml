@@ -34,6 +34,12 @@ jobs:
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist --no-progress
 
+      - name: Install Docsmith
+        run: |
+          composer global require mRPunyapal/docsmith:^0.5.1
+          mkdir -p vendor/mrpunyapal
+          ln -s "$(composer global config home)/vendor/mrpunyapal/docsmith" vendor/mrpunyapal/docsmith
+
       - name: Generate docs
         run: php build-docs.php
 
