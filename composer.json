@@ -10,7 +10,6 @@
     },
     "require-dev": {
         "laravel/pint": "^1.18",
-        "mrpunyapal/docsmith": "0.2.1",
         "pestphp/pest": "^3.8 || ^4.0",
         "phpstan/phpstan": "^2.1",
         "rector/rector": "^2.0"
@@ -32,6 +31,11 @@
         "sort-packages": true
     },
     "scripts": {
+        "docs:setup": [
+            "@php -r \"if (!file_exists('vendor/mrpunyapal/docsmith')) { symlink(realpath('../docsmith'), 'vendor/mrpunyapal/docsmith'); }\"",
+            "composer install --working-dir=vendor/mrpunyapal/docsmith"
+        ],
+        "docs:build": "@php build-docs.php",
         "lint": [
             "rector",
             "pint --parallel"
